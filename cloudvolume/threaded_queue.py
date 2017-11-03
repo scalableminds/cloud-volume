@@ -6,8 +6,6 @@ from functools import partial
 import threading
 import time
 
-from tqdm import tqdm
-
 class ThreadedQueue(object):
   """Grant threaded task processing to any derived class."""
   def __init__(self, n_threads, queue_size=0):
@@ -21,8 +19,6 @@ class ThreadedQueue(object):
     self._processed_lock = threading.Lock()
     self.processed = 0
     self._inserted = 0
-
-    self.with_progress = None
 
     self.start_threads(n_threads)
 
@@ -213,27 +209,21 @@ class ThreadedQueue(object):
       desc = progress
 
     last = self._inserted
-    with tqdm(total=self._inserted, disable=(not progress), desc=desc) as pbar:
-      # Allow queue to consume, but check up on
-      # progress and errors every tenth of a second
-      while not self._queue.empty():
-        size = self._queue.qsize()
-        delta = last - size
-        if delta != 0: # We should crash on negative numbers
-          pbar.update(delta)
-        last = size
-        self._check_errors()
-        time.sleep(0.1)
-
-      # Wait until all tasks in the queue are 
-      # fully processed. queue.task_done must be
-      # called for each task.
-      self._queue.join() 
+    # Allow queue to consume, but check up on
+    # progress and errors every tenth of a second
+    while not self._queue.empty():
+      size = self._queue.qsize()
+      delta = last - size
+      last = size
       self._check_errors()
+      time.sleep(0.1)
 
-      final = self._inserted - last
-      if final:
-        pbar.update(final)
+    # Wait until all tasks in the queue are 
+    # fully processed. queue.task_done must be
+    # called for each task.
+    self._queue.join() 
+    self._check_errors()
+
 
     if self._queue.empty():
       self._inserted = 0
@@ -252,5 +242,5 @@ class ThreadedQueue(object):
     return self
 
   def __exit__(self, exception_type, exception_value, traceback):
-    self.wait(progress=self.with_progress)
+    self.wait()
     self.kill_threads()

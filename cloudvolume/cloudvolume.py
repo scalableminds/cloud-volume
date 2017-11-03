@@ -9,7 +9,6 @@ import shutil
 
 import numpy as np
 from PIL import Image
-from tqdm import tqdm
 from six import string_types
 
 from intern.remote.boss import BossRemote
@@ -320,12 +319,7 @@ class CloudVolume(object):
     if self.path.protocol == 'boss':
       return self 
 
-    infojson = json.dumps(self.info, 
-      sort_keys=True,
-      indent=2, 
-      separators=(',', ': ')
-    )
-
+    infojson = json.dumps(self.info)
     self._storage.put_file('info', infojson, 
       content_type='application/json', 
       cache_control='no-cache'
@@ -401,17 +395,7 @@ class CloudVolume(object):
     if self.path.protocol == 'boss':
       return self.provenance
 
-    prov = self.provenance.serialize()
-
-    # hack to pretty print provenance files
-    prov = json.loads(prov)
-    prov = json.dumps(prov, 
-      sort_keys=True,
-      indent=2, 
-      separators=(',', ': ')
-    )
-
-    self._storage.put_file('provenance', prov, 
+    self._storage.put_file('provenance', self.provenance.serialize(), 
       content_type='application/json',
       cache_control='no-cache',
     )
@@ -437,7 +421,7 @@ class CloudVolume(object):
 
       CACHED: {}
       SOURCE: {}
-      """.format(cached_prov.serialize(), fresh_prov.serialize()))
+      """.format(cached_prov, fresh_prov))
 
   @property
   def dataset_name(self):
@@ -834,7 +818,7 @@ class CloudVolume(object):
 
     files = self._fetch_data(cloudpaths)
 
-    fileiter = tqdm(files, total=len(cloudpaths), desc="Rendering Image", disable=(not self.progress))
+    fileiter = files
 
     for fileinfo in fileiter:
       if fileinfo['error'] is not None:
@@ -960,7 +944,7 @@ class CloudVolume(object):
     if str(self.dtype) != str(img.dtype):
       raise ValueError('The uploaded image data type must match the volume data type. volume: {}, image: {}'.format(self.dtype, img.dtype))
 
-    iterator = tqdm(self._generate_chunks(img, offset), desc='Rechunking image', disable=(not self.progress))
+    iterator = self._generate_chunks(img, offset)
 
     uploads = []
     for imgchunk, spt, ept in iterator:
@@ -1075,7 +1059,7 @@ class CloudVolume(object):
 
     num_vertices = 0
     with open('./{}.obj'.format(filename), 'wb') as f:
-      for name, fragment in tqdm(meshdata.items(), disable=(not self.progress), desc="Saving Mesh"):
+      for name, fragment in meshdata.items():
         mesh_data = mesh2obj.mesh_to_obj(fragment, num_vertices)
         f.write('\n'.join(mesh_data) + '\n')
         num_vertices += fragment['num_vertices']
@@ -1186,7 +1170,7 @@ class VolumeCutout(np.ndarray):
 
     channel = slice(None) if channel is None else channel
 
-    for level in tqdm(xrange(self.shape[index]), desc="Saving Images"):
+    for level in xrange(self.shape[index]):
       if index == 0:
         img = self[level, :, :, channel ]
       elif index == 1:

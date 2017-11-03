@@ -13,7 +13,9 @@ import time
 from itertools import product
 
 import numpy as np
-from tqdm import tqdm
+
+def tqdm(a):
+  return a
 
 COLORS = {
   'RESET': "\033[m",

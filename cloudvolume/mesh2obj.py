@@ -19,7 +19,8 @@ Example Output:
     obj files for SEGID3 in ./SEGID3/
 """
 import struct
-from tqdm import tqdm
+def tqdm(a):
+  return a
 
 def decode_downloaded_data(frag_datas, progress=False):
   data = {}

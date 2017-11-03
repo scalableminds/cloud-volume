@@ -1,7 +1,6 @@
 import six
 from six import StringIO, BytesIO
 from six.moves import queue as Queue
-from collections import defaultdict
 import os.path
 import re
 from functools import partial
@@ -16,18 +15,10 @@ import tenacity
 
 from .lib import mkdir, extract_path
 from .threaded_queue import ThreadedQueue
-from .connectionpools import S3ConnectionPool, GCloudBucketPool
-
-class keydefaultdict(defaultdict):
-    def __missing__(self, key):
-        if self.default_factory is None:
-            raise KeyError( key )
-        else:
-            ret = self[key] = self.default_factory(key)
-            return ret
+from .connectionpools import S3ConnectionPool, GCloudConnectionPool
 
 S3_POOL = S3ConnectionPool()
-GC_POOL = keydefaultdict(lambda bucket_name: GCloudBucketPool(bucket_name))
+GC_POOL = GCloudConnectionPool()
 
 retry = tenacity.retry(
     reraise=True, 
@@ -401,7 +392,8 @@ class GoogleCloudStorageInterface(object):
     def __init__(self, path):
         global GC_POOL
         self._path = path
-        self._bucket = GC_POOL[path.bucket].get_connection()
+        self._client = GC_POOL.get_connection()
+        self._bucket = self._client.get_bucket(self._path.bucket)
 
     def get_path_to_file(self, file_path):
         clean = filter(None,[
@@ -465,7 +457,7 @@ class GoogleCloudStorageInterface(object):
 
     def release_connection(self):
         global GC_POOL
-        GC_POOL[self._path.bucket].release_connection(self._bucket)
+        GC_POOL.release_connection(self._client)
 
 class S3Interface(object):
 
