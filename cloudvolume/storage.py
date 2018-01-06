@@ -4,6 +4,7 @@ from six.moves import queue as Queue
 from collections import defaultdict
 import os.path
 import re
+import subprocess
 from functools import partial
 
 import boto3
@@ -14,7 +15,7 @@ from google.cloud.storage import Client
 import gzip
 import tenacity
 
-from .lib import mkdir, extract_path
+from .lib import mkdir, extract_path, ExtractedPath
 from .threaded_queue import ThreadedQueue
 from .connectionpools import S3ConnectionPool, GCloudBucketPool
 
@@ -54,7 +55,7 @@ class Storage(ThreadedQueue):
             uploads and downloads.
     """
     gzip_magic_numbers = [ 0x1f, 0x8b ]
-    def __init__(self, layer_path, n_threads=20, progress=False):
+    def __init__(self, layer_path, n_threads=20, progress=False, cache_path=None):
 
         self.progress = progress
 
@@ -64,11 +65,15 @@ class Storage(ThreadedQueue):
         if self._path.protocol == 'file':
             self._interface_cls = FileInterface
         elif self._path.protocol == 'gs':
-            self._interface_cls = GoogleCloudStorageInterface
+            #self._interface_cls = GoogleCloudStorageInterface
+            self._interface_cls = GoogleCloudStorageUtilInterface
         elif self._path.protocol == 's3':
             self._interface_cls = S3Interface
 
         self._interface = self._interface_cls(self._path)
+
+	if cache_path != None:
+	    self.gsutil_temp_path = mkdir(os.path.join(cache_path, 'gsutil')) 
 
         super(Storage, self).__init__(n_threads)
 
@@ -166,42 +171,87 @@ class Storage(ThreadedQueue):
             content = self._maybe_uncompress(content)
         return content
 
+
+    
     def get_files(self, file_paths):
-        """
-        returns a list of files faster by using threads
-        """
+        if self._interface_cls == GoogleCloudStorageUtilInterface:
+        # gsutil version
 
-        results = []
+    	    results = []
+    
+      	    local_interface = FileInterface(ExtractedPath(protocol=u'file', intermediate_path=self.gsutil_temp_path, bucket=u'',dataset=u'',layer=u''))
+    	    print(vars(local_interface))
+            gsutil_file_paths = map(self._interface.get_gsutil_path_to_file, file_paths)
+            print(file_paths)
+            gsutil_download_cmd = "gsutil -q -m cp -I {cache_path}".format(cache_path = self.gsutil_temp_path)
+    	    print(gsutil_download_cmd)
+    
+    	    gcs_pipe = subprocess.Popen([gsutil_download_cmd],
+    	    stdin=subprocess.PIPE,
+    	    stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            shell=True
+            )
+    
+    	    (gcs_res, gcs_err) = gcs_pipe.communicate(input="\n".join(gsutil_file_paths))
 
-        def get_file_thunk(path, interface):
-            result = error = None 
-
-            try:
-                result = interface.get_file(path)
-            except Exception as err:
-                error = err
-                print(err)
-            
-            content, decompress = result
-            if content and decompress:
-                content = self._maybe_uncompress(content)
-
-            results.append({
+	
+    
+    	# NOTE: gsutil cp prints success/failure output to stderr, so it NEEDS to be suppresed with -q
+    	    if not gcs_err == '':
+    	        print(gcs_err)
+    	    	return None
+    
+    	    for path in file_paths:
+    	   	content = error = None
+    	   	try:
+    			# 0 because already uncompressed by gsutil
+    			content = local_interface.get_file(os.path.basename(path))[0]
+                except Exception as err:
+                    	error = err
+    	    	results.append({
                 "filename": path,
                 "content": content,
                 "error": error,
-            })
+    	    	})
+    		return results
+    
+   	else: 
+	#version that is used for everything else
+        #returns a list of files faster by using threads
 
-        for path in file_paths:
-            if len(self._threads):
-                self.put(partial(get_file_thunk, path))
-            else:
-                get_file_thunk(path, self._interface)
+            results = []
 
-        desc = 'Downloading' if self.progress else None
-        self.wait(desc)
+            def get_file_thunk(path, interface):
+            	result = error = None 
 
-        return results
+            	try:
+                	result = interface.get_file(path)
+            	except Exception as err:
+               		error = err
+                	print(err)
+            
+            	content, decompress = result
+            	if content and decompress:
+                	content = self._maybe_uncompress(content)
+
+            	results.append({
+                	"filename": path,
+                	"content": content,
+                	"error": error,
+            	})
+
+            for path in file_paths:
+            	if len(self._threads):
+                	self.put(partial(get_file_thunk, path))
+            	else:
+                	get_file_thunk(path, self._interface)
+
+            desc = 'Downloading' if self.progress else None
+            self.wait(desc)
+
+            return results
+    
 
     def delete_file(self, file_path):
 
@@ -395,6 +445,103 @@ class FileInterface(object):
 
     def release_connection(self):
         pass
+
+class GoogleCloudStorageUtilInterface(object):
+    def __init__(self, path):
+        global GC_POOL
+        self._path = path
+        self._bucket = GC_POOL[path.bucket].get_connection()
+
+    def get_path_to_file(self, file_path):
+        clean = filter(None,[
+          self._path.intermediate_path,
+          self._path.dataset,
+          self._path.layer,
+          file_path
+        ])
+        return os.path.join(*clean)
+
+    def get_gsutil_path_to_file(self, file_path):
+        clean = filter(None,[
+	  self._path.protocol + "://",
+	  self._path.bucket,
+          self._path.intermediate_path,
+          self._path.dataset,
+          self._path.layer,
+          file_path
+        ])
+        return os.path.join(*clean)
+
+    @retry
+    def put_file(self, file_path, content, content_type, compress, cache_control=None):
+        key = self.get_path_to_file(file_path)
+        blob = self._bucket.blob( key )
+        if compress:
+            blob.content_encoding = "gzip"
+        if cache_control:
+            blob.cache_control = cache_control
+        blob.upload_from_string(content, content_type)
+
+    @retry
+    def get_file(self, file_path):
+	"""
+        fp = self.get_gsutil_path_to_file(file_path)
+        print(fp)
+        gsutil_download_cmd = "sudo gsutil -m cp {filepath} - ".format(filepath = fp)
+	print(gsutil_download_cmd)
+	gcs_pipe = subprocess.Popen([gsutil_download_cmd],
+	    stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            shell=True
+        )
+	(res, err) = gcs_pipe.communicate()
+	if not err == '':
+	    return None, False
+	return res, True
+	"""	
+        key = self.get_path_to_file(file_path)
+        blob = self._bucket.get_blob( key )
+        if not blob:
+            return None, False
+        # blob handles the decompression in the case
+        # it is necessary
+        return blob.download_as_string(), False
+
+    def exists(self, file_path):
+        key = self.get_path_to_file(file_path)
+        blob = self._bucket.get_blob(key)
+        return blob is not None
+
+    @retry
+    def delete_file(self, file_path):
+        key = self.get_path_to_file(file_path)
+        
+        try:
+            self._bucket.delete_blob( key )
+        except google.cloud.exceptions.NotFound:
+            pass
+
+    def list_files(self, prefix, flat=False):
+        """
+        List the files in the layer with the given prefix. 
+
+        flat means only generate one level of a directory,
+        while non-flat means generate all file paths with that 
+        prefix.
+        """
+        layer_path = self.get_path_to_file("")        
+        path = os.path.join(layer_path, prefix)
+        for blob in self._bucket.list_blobs(prefix=path):
+            filename = blob.name.replace(layer_path + '/', '')
+            if not flat and filename[-1] != '/':
+                yield filename
+            elif flat and '/' not in blob.name.replace(path, ''):
+                yield filename
+
+    def release_connection(self):
+        global GC_POOL
+        GC_POOL[self._path.bucket].release_connection(self._bucket)
+
 
 
 class GoogleCloudStorageInterface(object):
