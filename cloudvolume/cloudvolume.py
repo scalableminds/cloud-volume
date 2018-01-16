@@ -19,11 +19,11 @@ from intern.resource.boss.resource import ChannelResource, ExperimentResource, C
 from .secrets import boss_credentials, CLOUD_VOLUME_DIR
 
 from . import lib, chunks
-from .lib import ( 
-  toabs, colorize, red, yellow, 
-  mkdir, clamp, xyzrange, Vec, 
-  Bbox, min2, max2, check_bounds, 
-  jsonify 
+from .lib import (
+  toabs, colorize, red, yellow,
+  mkdir, clamp, xyzrange, Vec,
+  Bbox, min2, max2, check_bounds,
+  jsonify
 )
 from .meshservice import PrecomputedMeshService
 from .provenance import DataLayerProvenance
@@ -51,7 +51,7 @@ class EmptyVolumeException(Exception):
 
 class EmptyRequestException(Exception):
   """
-  Requesting uploading or downloading 
+  Requesting uploading or downloading
   a bounding box of less than one cubic voxel
   is impossible.
   """
@@ -67,8 +67,8 @@ class CloudVolume(object):
   datasets on supported hosts like Google Storage, S3, and local Filesystems.
 
   Uploading to and downloading from a neuroglancer dataset requires specifying
-  an `info` file located at the root of a data layer. Amongst other things, 
-  the bounds of the volume are described in the info file via a 3D "offset" 
+  an `info` file located at the root of a data layer. Amongst other things,
+  the bounds of the volume are described in the info file via a 3D "offset"
   and 3D "shape" in voxels.
 
   Required:
@@ -87,14 +87,14 @@ class CloudVolume(object):
     fill_missing: (bool) If a file inside volume bounds is unable to be fetched:
         True: Use a block of zeros
         False: Throw an error
-    cache: (bool or str) Store downloaded and uploaded files in a cache on disk 
-      and preferentially read from it before redownloading. 
+    cache: (bool or str) Store downloaded and uploaded files in a cache on disk
+      and preferentially read from it before redownloading.
         - falsey value: no caching will occur.
         - True: cache will be located in a standard location.
         - non-empty string: cache is located at this file path
     cdn_cache: (int, bool, or str) Sets the Cache-Control HTTP header on uploaded image files.
       Most cloud providers perform some kind of caching. As of this writing, Google defaults to
-      3600 seconds. Most of the time you'll want to go with the default. 
+      3600 seconds. Most of the time you'll want to go with the default.
       - int: number of seconds for cache to be considered fresh (max-age)
       - bool: True: max-age=3600, False: no-cache
       - str: set the header manually
@@ -102,10 +102,10 @@ class CloudVolume(object):
             This is useful when creating new datasets.
     provenance: (string, dict, or object) in lieu of fetching a neuroglancer provenance file, use this provided one.
             This is useful when doing multiprocessing.
-    progress: (bool) Show tqdm progress bars. 
+    progress: (bool) Show tqdm progress bars.
         Defaults True in interactive python, False in script execution mode.
   """
-  def __init__(self, cloudpath, mip=0, bounded=True, fill_missing=False, 
+  def __init__(self, cloudpath, mip=0, bounded=True, fill_missing=False,
       cache=False, cdn_cache=True, progress=INTERACTIVE, info=None, provenance=None):
 
     self.path = lib.extract_path(cloudpath)
@@ -116,7 +116,7 @@ class CloudVolume(object):
     self.fill_missing = fill_missing
     self.cache = cache
     self.cdn_cache = cdn_cache
-    self.mesh = PrecomputedMeshService(weakref.proxy(self)) 
+    self.mesh = PrecomputedMeshService(weakref.proxy(self))
 
     if self.cache:
       if not os.path.exists(self.cache_path):
@@ -148,7 +148,7 @@ class CloudVolume(object):
   def _storage(self):
     if self.path.protocol == 'boss':
       return None
-    
+
     try:
       return Storage(self.layer_cloudpath, n_threads=0)
     except:
@@ -157,21 +157,21 @@ class CloudVolume(object):
             self.path
         ))
       raise
-      
+
   @classmethod
   def create_new_info(cls, num_channels, layer_type, data_type, encoding, resolution, voxel_offset, volume_size, mesh=None, chunk_size=DEFAULT_CHUNK_SIZE):
     """
     Used for creating new neuroglancer info files.
 
     Required:
-      num_channels: (int) 1 for grayscale, 3 for RGB 
+      num_channels: (int) 1 for grayscale, 3 for RGB
       layer_type: (str) typically "image" or "segmentation"
       data_type: (str) e.g. "uint8", "uint16", "uint32", "float32"
       encoding: (str) "raw" for binaries like numpy arrays, "jpeg"
       resolution: int (x,y,z), x,y,z voxel dimensions in nanometers
       voxel_offset: int (x,y,z), beginning of dataset in positive cartesian space
       volume_size: int (x,y,z), extent of dataset in cartesian space from voxel_offset
-    
+
     Optional:
       mesh: (str) name of mesh directory, typically "mesh"
       chunk_size: int (x,y,z), dimensions of each downloadable 3D image chunk in voxels
@@ -221,7 +221,7 @@ class CloudVolume(object):
 
     mismatch_error = ValueError("""
       Data layer info file differs from cache. Please check whether this
-      change invalidates your cache. 
+      change invalidates your cache.
 
       If VALID do one of:
         1) Manually delete the cache (see location below)
@@ -229,9 +229,9 @@ class CloudVolume(object):
           vol = CloudVolume(..., cache=False) # refreshes from source
           vol.cache = True
           vol.commit_info() # writes to disk
-      If INVALID do one of: 
-        1) Delete the cache manually (see cache location below) 
-        2) Instantiate as follows: 
+      If INVALID do one of:
+        1) Delete the cache manually (see cache location below)
+        2) Instantiate as follows:
           vol = CloudVolume(..., cache=False) # refreshes info from source
           vol.flush_cache() # deletes cache
           vol.cache = True
@@ -241,8 +241,8 @@ class CloudVolume(object):
       SOURCE: {source}
       CACHE LOCATION: {path}
       """.format(
-        cache=cache_info, 
-        source=fresh_info, 
+        cache=cache_info,
+        source=fresh_info,
         path=self.cache_path
     ))
 
@@ -284,7 +284,7 @@ class CloudVolume(object):
 
   def fetch_boss_info(self):
     experiment = ExperimentResource(
-      name=self.path.dataset, 
+      name=self.path.dataset,
       collection_name=self.path.bucket
     )
     rmt = BossRemote(boss_credentials)
@@ -294,7 +294,7 @@ class CloudVolume(object):
     coord_frame = rmt.get_project(coord_frame)
 
     channel = ChannelResource(self.path.layer, self.path.bucket, self.path.dataset)
-    channel = rmt.get_project(channel)    
+    channel = rmt.get_project(channel)
 
     unit_factors = {
       'nanometers': 1,
@@ -335,16 +335,16 @@ class CloudVolume(object):
 
   def commit_info(self):
     if self.path.protocol == 'boss':
-      return self 
+      return self
 
-    infojson = jsonify(self.info, 
+    infojson = jsonify(self.info,
       sort_keys=True,
-      indent=2, 
+      indent=2,
       separators=(',', ': ')
     )
 
-    self._storage.put_file('info', infojson, 
-      content_type='application/json', 
+    self._storage.put_file('info', infojson,
+      content_type='application/json',
       cache_control='no-cache'
     ).wait()
     self._maybe_cache_info()
@@ -383,7 +383,7 @@ class CloudVolume(object):
       prov = json.loads(prov)
 
     provobj = DataLayerProvenance(**prov)
-    provobj.sources = provobj.sources or []  
+    provobj.sources = provobj.sources or []
     provobj.owners = provobj.owners or []
     provobj.processing = provobj.processing or []
     provobj.description = provobj.description or ""
@@ -401,8 +401,8 @@ class CloudVolume(object):
       try:
         provfile = json5.loads(provfile)
       except ValueError:
-        raise ValueError(red("""The provenance file could not be JSON decoded. 
-          Please reformat the provenance file before continuing. 
+        raise ValueError(red("""The provenance file could not be JSON decoded.
+          Please reformat the provenance file before continuing.
           Contents: {}""".format(provfile)))
     else:
       provfile = {
@@ -422,13 +422,13 @@ class CloudVolume(object):
 
     # hack to pretty print provenance files
     prov = json.loads(prov)
-    prov = jsonify(prov, 
+    prov = jsonify(prov,
       sort_keys=True,
-      indent=2, 
+      indent=2,
       separators=(',', ': ')
     )
 
-    self._storage.put_file('provenance', prov, 
+    self._storage.put_file('provenance', prov,
       content_type='application/json',
       cache_control='no-cache',
     )
@@ -459,7 +459,7 @@ class CloudVolume(object):
   @property
   def dataset_name(self):
     return self.path.dataset
-  
+
   @property
   def layer(self):
     return self.path.layer
@@ -490,7 +490,7 @@ class CloudVolume(object):
   @property
   def cache_path(self):
     if type(self.cache) is not str:
-      return toabs(os.path.join(CLOUD_VOLUME_DIR, 'cache', 
+      return toabs(os.path.join(CLOUD_VOLUME_DIR, 'cache',
         self.path.protocol, self.path.bucket.replace('/', ''), self.path.intermediate_path,
         self.path.dataset, self.path.layer
       ))
@@ -499,7 +499,7 @@ class CloudVolume(object):
 
   @property
   def shape(self):
-    """Returns Vec(x,y,z,channels) shape of the volume similar to numpy.""" 
+    """Returns Vec(x,y,z,channels) shape of the volume similar to numpy."""
     return self.mip_shape(self.mip)
 
   def mip_shape(self, mip):
@@ -508,7 +508,7 @@ class CloudVolume(object):
 
   @property
   def volume_size(self):
-    """Returns Vec(x,y,z) shape of the volume (i.e. shape - channels) similar to numpy.""" 
+    """Returns Vec(x,y,z) shape of the volume (i.e. shape - channels) similar to numpy."""
     return self.mip_volume_size(self.mip)
 
   def mip_volume_size(self, mip):
@@ -553,7 +553,7 @@ class CloudVolume(object):
   def mip_voxel_offset(self, mip):
     return Vec(*self.info['scales'][mip]['voxel_offset'])
 
-  @property 
+  @property
   def resolution(self):
     """Vec(x,y,z) dimensions of each voxel in nanometers"""
     return self.mip_resolution(self.mip)
@@ -671,8 +671,8 @@ class CloudVolume(object):
 
     Returns: info dict
     """
-    # e.g. {"encoding": "raw", "chunk_sizes": [[64, 64, 64]], "key": "4_4_40", 
-    # "resolution": [4, 4, 40], "voxel_offset": [0, 0, 0], 
+    # e.g. {"encoding": "raw", "chunk_sizes": [[64, 64, 64]], "key": "4_4_40",
+    # "resolution": [4, 4, 40], "voxel_offset": [0, 0, 0],
     # "size": [2048, 2048, 256]}
     fullres = self.info['scales'][0]
 
@@ -680,9 +680,9 @@ class CloudVolume(object):
     # zooming out will slightly shift the data.
     # Imagine the offset is 10
     #    the mip 1 will have an offset of 5
-    #    the mip 2 will have an offset of 2 instead of 2.5 
+    #    the mip 2 will have an offset of 2 instead of 2.5
     #        meaning that it will be half a pixel to the left
-    
+
     chunk_size = lib.find_closest_divisor(fullres['chunk_sizes'][0], closest_to=[64,64,64])
 
     def downscale(size, roundingfn):
@@ -709,7 +709,7 @@ class CloudVolume(object):
         self.info['scales'][index] = newscale
         break
 
-    if not preexisting:    
+    if not preexisting:
       self.info['scales'].append(newscale)
 
     return newscale
@@ -732,14 +732,14 @@ class CloudVolume(object):
     channel_slice = slices.pop()
 
     minpt = Vec(*[ slc.start for slc in slices ])
-    maxpt = Vec(*[ slc.stop for slc in slices ]) 
+    maxpt = Vec(*[ slc.stop for slc in slices ])
     steps = Vec(*[ slc.step for slc in slices ])
 
     return Bbox(minpt, maxpt), steps, channel_slice
 
   def __realized_bbox(self, requested_bbox):
     """
-    The requested bbox might not be aligned to the underlying chunk grid 
+    The requested bbox might not be aligned to the underlying chunk grid
     or even outside the bounds of the dataset. Convert the request into
     a bbox representing something that can be actually downloaded.
 
@@ -753,7 +753,7 @@ class CloudVolume(object):
     Produce a summary of whether all the requested chunks exist.
 
     bbox_or_slices: accepts either a Bbox or a tuple of slices representing
-      the requested volume. 
+      the requested volume.
     Returns: { chunk_file_name: boolean, ... }
     """
     if type(bbox_or_slices) is Bbox:
@@ -772,7 +772,7 @@ class CloudVolume(object):
     Delete the files within the bounding box.
 
     bbox_or_slices: accepts either a Bbox or a tuple of slices representing
-      the requested volume. 
+      the requested volume.
     """
     if type(bbox_or_slices) is Bbox:
       requested_bbox = bbox_or_slices
@@ -797,7 +797,7 @@ class CloudVolume(object):
 
   def __getitem__(self, slices):
     (requested_bbox, steps, channel_slice) = self.__interpret_slices(slices)
-    
+
     if self.path.protocol == 'boss':
       cutout = self._boss_cutout(requested_bbox, steps, channel_slice)
     else:
@@ -809,19 +809,19 @@ class CloudVolume(object):
       return cutout
 
     # This section below covers the case where the requested volume is bigger
-    # than the dataset volume and the bounds guards have been switched 
+    # than the dataset volume and the bounds guards have been switched
     # off. This is useful for Marching Cubes where a 1px excess boundary
     # is needed.
     shape = list(requested_bbox.size3()) + [ cutout.shape[3] ]
     renderbuffer = np.zeros(shape=shape, dtype=self.dtype)
     lp = cutout.bounds.minpt - requested_bbox.minpt
     hp = lp + cutout.bounds.size3()
-    renderbuffer[ lp.x:hp.x, lp.y:hp.y, lp.z:hp.z, : ] = cutout 
+    renderbuffer[ lp.x:hp.x, lp.y:hp.y, lp.z:hp.z, : ] = cutout
     return VolumeCutout.from_volume(self, renderbuffer, requested_bbox)
 
   def flush_cache(self):
     if os.path.exists(self.cache_path):
-        shutil.rmtree(self.cache_path) 
+        shutil.rmtree(self.cache_path)
 
   def _content_type(self):
     if self.encoding == 'jpeg':
@@ -848,7 +848,7 @@ class CloudVolume(object):
     already_have = requested.intersection(set(filenames))
     to_download = requested.difference(already_have)
 
-    download_paths = [ os.path.join(basepathmap[fname], fname) for fname in to_download ]    
+    download_paths = [ os.path.join(basepathmap[fname], fname) for fname in to_download ]
 
     return { 'local': already_have, 'remote': download_paths }
 
@@ -875,8 +875,8 @@ class CloudVolume(object):
             content = item['content'] or b''
             paths.append( (item['filename'], content) )
 
-        storage.put_files(paths, 
-          content_type=self._content_type(), 
+        storage.put_files(paths,
+          content_type=self._content_type(),
           compress=self._should_compress()
         )
 
@@ -884,7 +884,7 @@ class CloudVolume(object):
 
   def _cutout(self, requested_bbox, steps, channel_slice=slice(None)):
     realized_bbox = self.__realized_bbox(requested_bbox)
-    
+
     def multichannel_shape(bbox):
       shape = bbox.size3()
       return (shape[0], shape[1], shape[2], self.num_channels)
@@ -917,7 +917,7 @@ class CloudVolume(object):
         print(red('File Read Error: {} bytes, {}, {}, errors: {}'.format(
             content_len, bbox, fileinfo['filename'], fileinfo['error'])))
         raise
-      
+
       start = bbox.minpt - realized_bbox.minpt
       end = min2(start + self.underlying, renderbuffer.shape[:3] )
       delta = min2(end - start, img3d.shape[:3])
@@ -929,9 +929,9 @@ class CloudVolume(object):
     lp = bounded_request.minpt - realized_bbox.minpt # low realized point
     hp = lp + bounded_request.size3()
 
-    renderbuffer = renderbuffer[ lp.x:hp.x:steps.x, lp.y:hp.y:steps.y, lp.z:hp.z:steps.z, channel_slice ] 
+    renderbuffer = renderbuffer[ lp.x:hp.x:steps.x, lp.y:hp.y:steps.y, lp.z:hp.z:steps.z, channel_slice ]
     return VolumeCutout.from_volume(self, renderbuffer, bounded_request)
-  
+
   def _boss_cutout(self, requested_bbox, steps, channel_slice=slice(None)):
     bounds = Bbox.clamp(requested_bbox, self.bounds)
 
@@ -945,10 +945,10 @@ class CloudVolume(object):
     layer_type = 'image' if self.layer_type == 'unknown' else self.layer_type
 
     chan = ChannelResource(
-      collection_name=self.path.bucket, 
-      experiment_name=self.path.dataset, 
+      collection_name=self.path.bucket,
+      experiment_name=self.path.dataset,
       name=self.path.layer, # Channel
-      type=layer_type, 
+      type=layer_type,
       datatype=self.dtype,
     )
 
@@ -997,10 +997,10 @@ class CloudVolume(object):
     layer_type = 'image' if self.layer_type == 'unknown' else self.layer_type
 
     chan = ChannelResource(
-      collection_name=self.path.bucket, 
-      experiment_name=self.path.dataset, 
+      collection_name=self.path.bucket,
+      experiment_name=self.path.dataset,
       name=self.path.layer, # Channel
-      type=layer_type, 
+      type=layer_type,
       datatype=self.dtype,
     )
 
@@ -1034,7 +1034,7 @@ class CloudVolume(object):
 
       filename = "{}-{}_{}-{}_{}-{}".format(
         spt.x, clamp_ept.x,
-        spt.y, clamp_ept.y, 
+        spt.y, clamp_ept.y,
         spt.z, clamp_ept.z
       )
 
@@ -1043,8 +1043,8 @@ class CloudVolume(object):
       uploads.append( (cloudpath, encoded) )
 
     with Storage(self.layer_cloudpath, progress=self.progress) as storage:
-      storage.put_files(uploads, 
-        content_type=self._content_type(), 
+      storage.put_files(uploads,
+        content_type=self._content_type(),
         compress=self._should_compress(),
         cache_control=self._cdn_cache_control(self.cdn_cache),
       )
@@ -1053,10 +1053,10 @@ class CloudVolume(object):
       mkdir(self.cache_path)
       if self.progress:
         print("Caching upload...")
-      
+
       with Storage('file://' + self.cache_path, progress=self.progress) as storage:
-        storage.put_files(uploads, 
-          content_type=self._content_type(), 
+        storage.put_files(uploads,
+          content_type=self._content_type(),
           compress=self._should_compress()
         )
 
@@ -1102,15 +1102,15 @@ class CloudVolume(object):
 
     if len(img.shape) == 3:
       img = img[:, :, :, np.newaxis ]
-  
+
     for startpt in xyzrange( img_offset, img_end, self.underlying ):
       endpt = min2(startpt + self.underlying, shape)
       chunkimg = img[ startpt.x:endpt.x, startpt.y:endpt.y, startpt.z:endpt.z, : ]
 
       spt = (startpt + bounds.minpt).astype(int)
       ept = (endpt + bounds.minpt).astype(int)
-    
-      yield chunkimg, spt, ept 
+
+      yield chunkimg, spt, ept
 
   def __chunknames(self, bbox, volume_bbox, key, chunk_size):
     paths = []
@@ -1119,7 +1119,7 @@ class CloudVolume(object):
       highpt = min2(Vec(x,y,z) + chunk_size, volume_bbox.maxpt)
       filename = "{}-{}_{}-{}_{}-{}".format(
         x, highpt.x,
-        y, highpt.y, 
+        y, highpt.y,
         z, highpt.z
       )
       paths.append( os.path.join(key, filename) )
@@ -1129,7 +1129,7 @@ class CloudVolume(object):
   def save_mesh(self, *args, **kwargs):
     warn("WARNING: vol.save_mesh is deprecated. Please use vol.mesh.save(...) instead.")
     self.mesh.save(*args, **kwargs)
-    
+
 
 def generate_slices(slices, minsize, maxsize, bounded=True):
   """Assisting function for __getitem__. e.g. vol[:,:,:,:]"""
@@ -1144,14 +1144,14 @@ def generate_slices(slices, minsize, maxsize, bounded=True):
   while len(slices) < len(maxsize):
     slices.append( slice(None, None, None) )
 
-  # First three slices are x,y,z, last is channel. 
+  # First three slices are x,y,z, last is channel.
   # Handle only x,y,z here, channel seperately
   for index, slc in enumerate(slices):
     if isinstance(slc, integer_types) or isinstance(slc, float):
       slices[index] = slice(int(slc), int(slc)+1, 1)
     else:
       start = minsize[index] if slc.start is None else slc.start
-      end = maxsize[index] if slc.stop is None else slc.stop 
+      end = maxsize[index] if slc.stop is None else slc.stop
       step = 1 if slc.step is None else slc.step
 
       if step < 0:
@@ -1163,7 +1163,7 @@ def generate_slices(slices, minsize, maxsize, bounded=True):
       # marching cubes.
       if bounded:
         # if start < 0: # this is support for negative indicies
-          # start = maxsize[index] + start         
+          # start = maxsize[index] + start
         check_bounds(start, minsize[index], maxsize[index])
         # if end < 0: # this is support for negative indicies
         #   end = maxsize[index] + end
@@ -1180,7 +1180,7 @@ class VolumeCutout(np.ndarray):
 
   def __init__(self, buf, dataset_name, layer, mip, layer_type, bounds, *args, **kwargs):
     super(VolumeCutout, self).__init__()
-    
+
     self.dataset_name = dataset_name
     self.layer = layer
     self.mip = mip
@@ -1206,7 +1206,7 @@ class VolumeCutout(np.ndarray):
 
     if directory is None:
       directory = os.path.join('./saved_images', self.dataset_name, self.layer, str(self.mip), self.bounds.to_filename())
-    
+
     mkdir(directory)
 
     print("Saving to {}".format(directory))
@@ -1240,7 +1240,7 @@ class VolumeCutout(np.ndarray):
         # it requires a 90deg counterclockwise rotation on xy plane (leaving z alone)
         # followed by a flip on Y
         if axis == 'z':
-          img2d = np.flipud(np.rot90(img2d, 1)) 
+          img2d = np.flipud(np.rot90(img2d, 1))
 
         if img2d.dtype == 'uint8':
           img2d = Image.fromarray(img2d, 'L')
