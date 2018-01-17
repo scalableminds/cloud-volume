@@ -9,7 +9,7 @@ CACHE_KWARG = 'cache'
 
 class CloudVolumeGSUtil(CloudVolume):
   def __init__(self, *args, **kwargs):
-    if kwargs.has_key(CACHE_KWARG) and not kwargs[CACHE_KWARG]:
+    if CACHE_KWARG in kwargs and not kwargs[CACHE_KWARG]:
       raise ValueError("GSUtil *MUST* use cache")
     super(CloudVolumeGSUtil, self).__init__(cache=True, *args, **kwargs)
 
