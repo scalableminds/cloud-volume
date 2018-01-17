@@ -31,11 +31,11 @@ class CloudVolumeGSUtil(CloudVolume):
         gspaths = map(storage.get_path_to_file, locations['remote'])
 
         start_time = datetime.now()
-        (gcs_res, gcs_err) = gcs_pipe.communicate(input="\n".join(gspaths))
+        gcs_pipe.communicate(input="\n".join(gspaths))
         end_time = datetime.now()
 
         if gcs_pipe.returncode:
-          raise IOError("Something went wrong with the gsutil transfer \n {}".format(gcs_err))
+          raise IOError("Something went wrong with the gsutil transfer.")
 
         if self.progress:
             print("Elapsed Time: {}".format(end_time - start_time))
