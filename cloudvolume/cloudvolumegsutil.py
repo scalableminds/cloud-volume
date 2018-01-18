@@ -38,7 +38,7 @@ class CloudVolumeGSUtil(CloudVolume):
                 gcs_pipe = subprocess.Popen([gsutil_download_cmd],
                                                                         stdin=subprocess.PIPE,
                                                                         shell=True)
-                gcs_pipe.communicate(input='\n'.join(gspaths))
+                gcs_pipe.communicate(input='\n'.join(gspaths).encode('utf-8'))
 
                 if gcs_pipe.returncode:
                     message = 'Error with gsutil transfer. Exit Code {}'.format(
