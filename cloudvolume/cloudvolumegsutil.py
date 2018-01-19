@@ -19,7 +19,8 @@ class CloudVolumeGSUtil(CloudVolume):
     def __init__(self, *args, **kwargs):
         if CACHE_KWARG in kwargs and not kwargs[CACHE_KWARG]:
             raise ValueError('GSUtil *MUST* use cache')
-        super(CloudVolumeGSUtil, self).__init__(cache=True, *args, **kwargs)
+        kwargs[CACHE_KWARG] = True
+        super(CloudVolumeGSUtil, self).__init__(*args, **kwargs)
 
     @retry
     def gsutil_download(self, cloudpaths):
