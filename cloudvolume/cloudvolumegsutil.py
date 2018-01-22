@@ -6,6 +6,7 @@ from .storage import Storage
 import tenacity
 
 CACHE_KWARG = 'cache'
+CACHE_ARGS_INDEX = 4
 
 retry = tenacity.retry(
         reraise=True,
@@ -17,9 +18,18 @@ retry = tenacity.retry(
 class CloudVolumeGSUtil(CloudVolume):
 
     def __init__(self, *args, **kwargs):
-        if CACHE_KWARG in kwargs and not kwargs[CACHE_KWARG]:
-            raise ValueError('GSUtil *MUST* use cache')
-        kwargs[CACHE_KWARG] = True
+        cache_specified = False
+        if CACHE_KWARG in kwargs:
+            cache_specified = True
+            if not kwargs[CACHE_KWARG]:
+                raise ValueError('GSUtil *MUST* use cache')
+        elif CACHE_ARGS_INDEX in range(len(args)):
+            cache_specified = True
+            if not args[CACHE_ARGS_INDEX]:
+                raise ValueError('GSUtil *MUST* use cache')
+        if not cache_specified: 
+            kwargs[CACHE_KWARG] = True
+
         super(CloudVolumeGSUtil, self).__init__(*args, **kwargs)
 
     @retry
