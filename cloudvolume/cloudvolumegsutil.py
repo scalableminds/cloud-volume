@@ -6,6 +6,7 @@ from .storage import Storage
 import tenacity
 
 CACHE_KWARG = 'cache'
+GZIP_KWARG='gzip'
 
 retry = tenacity.retry(
         reraise=True,
@@ -22,6 +23,11 @@ class CloudVolumeGSUtil(CloudVolume):
                 raise ValueError('GSUtil *MUST* use cache')
         else:
             kwargs[CACHE_KWARG] = True
+
+        self.gzip = False
+        if GZIP_KWARG in kwargs:
+            self.gzip = kwargs.pop(GZIP_KWARG)
+
         super(CloudVolumeGSUtil, self).__init__(*args, **kwargs)
 
     @retry
@@ -30,14 +36,17 @@ class CloudVolumeGSUtil(CloudVolume):
 
         # load from gsutil only if there is something missing from the cache.
         if len(locations['remote']) != 0:
-            gsutil_download_cmd = 'gsutil -m {quiet} cp -I {cache_path}/{key}'.format(
+            gsutil_download_cmd = 'gsutil -m {quiet} cp {gzip} -I {cache_path}/{key}'.format(
                 quiet='' if self.progress else '-q',
+                gzip='-Z' if self.gzip else '',
                 cache_path=self.cache_path,
                 key=self.key)
 
+            if self.progress:
+                print(gsutil_download_cmd)
+
             with Storage(self.layer_cloudpath, progress=self.progress) as storage:
                 gspaths = map(storage.get_path_to_file, locations['remote'])
-
                 gcs_pipe = subprocess.Popen([gsutil_download_cmd],
                                             stdin=subprocess.PIPE,
                                             shell=True)
