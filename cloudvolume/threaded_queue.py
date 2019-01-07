@@ -223,7 +223,7 @@ class ThreadedQueue(object):
           pbar.update(delta)
         last = size
         self._check_errors()
-        time.sleep(0.1)
+        time.sleep(1e-9)
 
       # Wait until all tasks in the queue are 
       # fully processed. queue.task_done must be
